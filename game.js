@@ -57,6 +57,18 @@ class Bullet {
   }
 }
 
+// ── Skins ─────────────────────────────────────────────────────────────────────
+const SKINS = [
+  { name: 'CLÁSICA', color: '#fff', thrustColor: 'rgba(255, 130, 0, 0.85)',
+    verts: [[20, 0], [-12, -9], [-7, 0], [-12, 9]], thrustBase: -8 },
+  { name: 'CAZA', color: '#0ff', thrustColor: 'rgba(255, 0, 255, 0.85)',
+    verts: [[22, 0], [-4, -6], [-10, -2], [-13, 0], [-10, 2], [-4, 6]], thrustBase: -10 },
+  { name: 'CARGUERO', color: '#6f6', thrustColor: 'rgba(170, 255, 80, 0.85)',
+    verts: [[18, 0], [2, -13], [-14, -10], [-10, 0], [-14, 10], [2, 13]], thrustBase: -11 },
+  { name: 'CUERVO', color: '#f55', thrustColor: 'rgba(200, 100, 255, 0.85)',
+    verts: [[20, 0], [2, -12], [-16, -6], [-10, 0], [-16, 6], [2, 12]], thrustBase: -10 },
+];
+
 // ── Asteroid ──────────────────────────────────────────────────────────────────
 const RADII  = [0, 16, 30, 50];   // por tamaño 1, 2, 3
 const SPEEDS = [0, 85, 55, 32];   // velocidad base por tamaño
@@ -175,29 +187,30 @@ class Ship {
     // Parpadeo durante invencibilidad de reaparición
     if (this.invincible > 0 && Math.floor(this.invincible * 8) % 2 === 0) return;
 
+    const skin = SKINS[skinIndex];
+
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
-    ctx.strokeStyle = '#fff';
+    ctx.strokeStyle = skin.color;
     ctx.lineWidth   = 1.5;
     ctx.lineJoin    = 'round';
 
-    // Silueta clásica: triángulo con muesca trasera
+    // Silueta del skin activo
     ctx.beginPath();
-    ctx.moveTo( 20,  0);   // nariz
-    ctx.lineTo(-12, -9);   // ala izquierda
-    ctx.lineTo( -7,  0);   // muesca trasera
-    ctx.lineTo(-12,  9);   // ala derecha
+    ctx.moveTo(skin.verts[0][0], skin.verts[0][1]);
+    for (let i = 1; i < skin.verts.length; i++)
+      ctx.lineTo(skin.verts[i][0], skin.verts[i][1]);
     ctx.closePath();
     ctx.stroke();
 
     // Llama del propulsor
     if (this.thrusting && Math.random() > 0.35) {
       ctx.beginPath();
-      ctx.moveTo(-8, -4);
-      ctx.lineTo(-8 - rand(6, 14), 0);
-      ctx.lineTo(-8,  4);
-      ctx.strokeStyle = 'rgba(255, 130, 0, 0.85)';
+      ctx.moveTo(skin.thrustBase, -4);
+      ctx.lineTo(skin.thrustBase - rand(6, 14), 0);
+      ctx.lineTo(skin.thrustBase,  4);
+      ctx.strokeStyle = skin.thrustColor;
       ctx.stroke();
     }
 
@@ -382,6 +395,7 @@ class ShootingStar {
 let ship, bullets, asteroids, particles, powerups;
 let shootingStars, starTimer; // estrellas fugaces en curso y timer hasta la próxima
 let score, lives, level;
+let skinIndex = 0;   // skin activo
 let state;      // 'playing' | 'dead' | 'gameover'
 let deadTimer;
 
@@ -440,6 +454,8 @@ function killShip() {
 
 // ── Update ────────────────────────────────────────────────────────────────────
 function update(dt) {
+  if (pressed('KeyS')) skinIndex = (skinIndex + 1) % SKINS.length;
+
   if (state === 'gameover') {
     if (pressed('Space')) initGame();
     particles.forEach(p => p.update(dt));
@@ -562,6 +578,11 @@ function drawHUD() {
   ctx.textAlign = 'center';
   ctx.fillText(`NIVEL ${level}`, W / 2, 26);
 
+  ctx.font      = '13px monospace';
+  ctx.fillStyle = SKINS[skinIndex].color;
+  ctx.fillText(`SKIN: ${SKINS[skinIndex].name}`, W / 2, 44);
+  ctx.fillStyle = '#fff';
+
   for (let i = 0; i < lives; i++)
     drawLifeIcon(W - 16 - i * 22, 18);
 
@@ -606,7 +627,7 @@ function draw() {
   drawHUD();
 
   if (state === 'gameover')
-    drawOverlay('GAME OVER', `PUNTAJE: ${score}   —   ESPACIO PARA REINICIAR`);
+    drawOverlay('GAME OVER', `PUNTAJE: ${score}   —   ESPACIO PARA REINICIAR   —   S: CAMBIAR SKIN`);
 }
 
 // ── Loop principal ────────────────────────────────────────────────────────────
