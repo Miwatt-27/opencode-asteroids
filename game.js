@@ -145,6 +145,7 @@ class Ship {
     this.invincible    = 3;
     this.shootCooldown = 0;
     this.speedBoost    = 0;
+    this.tripleShot    = 0;
     this.dead          = false;
   }
 
@@ -153,6 +154,7 @@ class Ship {
     if (this.invincible    > 0) this.invincible    -= dt;
     if (this.shootCooldown > 0) this.shootCooldown -= dt;
     if (this.speedBoost    > 0) this.speedBoost    -= dt;
+    if (this.tripleShot    > 0) this.tripleShot    -= dt;
 
     const ROT    = 3.5;   // rad/s
     const THRUST = 260 * (this.speedBoost > 0 ? 2 : 1);  // px/s²
@@ -179,6 +181,14 @@ class Ship {
     const NOSE = 21;
     const ox = this.x + Math.cos(this.angle) * NOSE;
     const oy = this.y + Math.sin(this.angle) * NOSE;
+    if (this.tripleShot > 0) {
+      const SPREAD = 0.087; // ±5° de abanico cerrado
+      return [
+        new Bullet(ox, oy, this.angle - SPREAD),
+        new Bullet(ox, oy, this.angle),
+        new Bullet(ox, oy, this.angle + SPREAD),
+      ];
+    }
     return [new Bullet(ox, oy, this.angle)];
   }
 
@@ -250,11 +260,12 @@ class Particle {
   }
 }
 
-// ── Power-up (Velocidad) ──────────────────────────────────────────────────────
+// ── Power-up (Velocidad / Triple disparo) ─────────────────────────────────────
 class PowerUp {
-  constructor(x, y) {
+  constructor(x, y, type = 'speed') {
     this.x = x;
     this.y = y;
+    this.type = type;
     this.radius = 10;
     this.ttl  = 10;
     this.pulse = 0;
@@ -271,25 +282,33 @@ class PowerUp {
     if (this.ttl < 3 && Math.floor(this.ttl * 6) % 2 === 0) return;
 
     const r = this.radius + Math.sin(this.pulse * 4) * 1.5;
+    const color = this.type === 'triple' ? '#f0f' : '#0ff';
     ctx.save();
     ctx.translate(this.x, this.y);
-    ctx.strokeStyle = '#0ff';
+    ctx.strokeStyle = color;
     ctx.lineWidth   = 1.5;
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Icono: doble chevron ">>"
-    ctx.strokeStyle = '#0ff';
+    ctx.strokeStyle = color;
     ctx.lineWidth   = 2;
     ctx.lineJoin    = 'round';
     ctx.beginPath();
-    ctx.moveTo(-4, -5);
-    ctx.lineTo( 2,  0);
-    ctx.lineTo(-4,  5);
-    ctx.moveTo( 2, -5);
-    ctx.lineTo( 8,  0);
-    ctx.lineTo( 2,  5);
+    if (this.type === 'triple') {
+      // Icono: tres balas verticales (una detrás de la otra)
+      ctx.moveTo(0, -5); ctx.lineTo(0, 5);
+      ctx.moveTo(-5, -3); ctx.lineTo(-5, 3);
+      ctx.moveTo(5, -3); ctx.lineTo(5, 3);
+    } else {
+      // Icono: doble chevron ">>"
+      ctx.moveTo(-4, -5);
+      ctx.lineTo( 2,  0);
+      ctx.lineTo(-4,  5);
+      ctx.moveTo( 2, -5);
+      ctx.lineTo( 8,  0);
+      ctx.lineTo( 2,  5);
+    }
     ctx.stroke();
     ctx.restore();
   }
@@ -509,7 +528,7 @@ function update(dt) {
         score += POINTS[a.size];
         explode(a.x, a.y, a.size * 5);
         newAsteroids.push(...a.split());
-        if (Math.random() < 0.08) powerups.push(new PowerUp(a.x, a.y));
+        if (Math.random() < 0.08) powerups.push(new PowerUp(a.x, a.y, Math.random() < 0.5 ? 'speed' : 'triple'));
       }
     }
   }
@@ -541,7 +560,8 @@ function update(dt) {
   for (const pu of powerups) {
     if (!pu.dead && dist(ship, pu) < ship.radius + pu.radius) {
       pu.dead = true;
-      ship.speedBoost = 5;
+      if (pu.type === 'triple') ship.tripleShot = 5;
+      else ship.speedBoost = 5;
       explode(pu.x, pu.y, 6);
     }
   }
@@ -586,20 +606,24 @@ function drawHUD() {
   for (let i = 0; i < lives; i++)
     drawLifeIcon(W - 16 - i * 22, 18);
 
-  // Barra de velocidad activa
-  if (ship.speedBoost > 0) {
-    const boostTime = Math.max(0, ship.speedBoost);
+  // Barras de power-ups activos (velocidad y/o triple disparo)
+  let barY = H - 30;
+  const bars = [];
+  if (ship.speedBoost > 0) bars.push(['speed',  '#0ff', `VELOCIDAD ${ship.speedBoost.toFixed(1)}s`, ship.speedBoost]);
+  if (ship.tripleShot > 0) bars.push(['triple', '#f0f', `TRIPLE ${ship.tripleShot.toFixed(1)}s`, ship.tripleShot]);
+  for (const [type, color, label, time] of bars) {
     ctx.textAlign   = 'center';
-    ctx.fillStyle   = '#0ff';
+    ctx.fillStyle   = color;
     ctx.font        = '13px monospace';
-    ctx.fillText(`VELOCIDAD ${boostTime.toFixed(1)}s`, W / 2, H - 36);
+    ctx.fillText(label, W / 2, barY - 6);
 
     ctx.strokeStyle = 'rgba(255,255,255,0.35)';
     ctx.lineWidth   = 1;
-    ctx.strokeRect(W / 2 - 80, H - 30, 160, 6);
+    ctx.strokeRect(W / 2 - 80, barY, 160, 6);
 
-    ctx.fillStyle = '#0ff';
-    ctx.fillRect(W / 2 - 80, H - 30, 160 * (boostTime / 5), 6);
+    ctx.fillStyle = color;
+    ctx.fillRect(W / 2 - 80, barY, 160 * (time / 5), 6);
+    barY -= 16;
   }
 }
 
